@@ -1,0 +1,28 @@
+# Secrets and local config
+.env
+.env.*
+!.env.example
+devices.json
+
+# Local data and backups
+*.db
+*.db-journal
+*.bak
+*.bak*
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Imported configs stay local; keep the empty folder
+imports/*
+!imports/.gitkeep
+
+# Local helper and one-time scripts
+tests/patch_*.py
+tests/diag_*.py
+tests/check_ansi.py
+tests/check_failure.py
+tests/show_audit.py

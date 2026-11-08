@@ -1,0 +1,11 @@
+﻿{
+  "devices": [
+    {
+      "name": "kali-lab",
+      "address": "192.0.2.10",
+      "platform": "linux",
+      "port": 22,
+      "credentials": "KALI"
+    }
+  ]
+}
