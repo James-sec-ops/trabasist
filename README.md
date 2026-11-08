@@ -111,6 +111,17 @@ Service and unit names must match `^[A-Za-z0-9][A-Za-z0-9@._-]{0,63}$`. No other
 
 Copy the config file into the `imports` folder yourself, then ask Claude to import it by file name. Never paste configs into the chat. Only plain file names with the extensions `.txt .cfg .conf .config .log .ini` (up to 512 KB) are read from that folder, so Claude cannot be asked to read `.env` or any other path. Redaction is best effort, not a guarantee: review the stored text. It can also over-redact lines containing the word "community" (for example BGP `send-community`). That fails safe: it hides too much rather than too little.
 
+## Running the tests
+
+The tests are optional. With the virtual environment active, set the project path once per PowerShell window, then run any test file:
+
+```powershell
+$env:PYTHONPATH = (Get-Location).Path
+python tests\test_allowlist.py
+```
+
+Most tests use a temporary database and leave your data alone. `test_run_device_command.py` and `test_ssh_conn.py` log in to a real lab device and were written for the author's setup, so expect them to fail on other machines. `tests\reset_db.py` deletes all cases and steps from your database. Do not run it unless you want that.
+
 ## Adding your own error codes
 
 For 1.0.0 you add your own entries from Python. Save this as `add_my_code.py` in the project folder, edit the values, and run `python add_my_code.py` with the virtual environment active:
@@ -157,7 +168,6 @@ It prints the new entry's id. Adding the same code and platform twice is refused
 - **Host key refused after the device got a new IP.** Known hosts are stored per address. Run `python -m trabasist_server.add_device` again to trust the key at the new address.
 - **Host key refused on a device you rebuilt.** Run `ssh-keygen -R OLD_IP`, then trust the new key again with `add_device`. A changed key is refused on purpose, so verify the device first.
 - **Wrong password saved.** Edit `.env` by hand for now.
-- **"imports folder does not exist".** Create a folder named `imports` in the project folder.
 
 ## Roadmap
 
