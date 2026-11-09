@@ -26,3 +26,6 @@ tests/diag_*.py
 tests/check_ansi.py
 tests/check_failure.py
 tests/show_audit.py
+
+tests/live_batch*.py
+tests/show_case5.py

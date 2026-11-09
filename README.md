@@ -30,7 +30,7 @@ Not in v1 (planned for later): Windows Server device commands, SSH keys, switch 
 You need Windows, Python 3.12, Git and [Claude Desktop](https://claude.ai/download).
 
 ```powershell
-git clone <repo-url> trabasist
+git clone https://github.com/James-sec-ops/trabasist.git trabasist
 cd trabasist
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
