@@ -25,7 +25,7 @@ def validate_host(host) -> str:
     except ValueError:
         pass
     host = host.rstrip(".")
-    if not host or not all(_LABEL.match(part) for part in host.split(".")):
+    if not host or not all(_LABEL.fullmatch(part) for part in host.split(".")):
         raise ValueError("host is not a valid IP address or hostname")
     return host
 

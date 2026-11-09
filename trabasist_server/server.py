@@ -30,7 +30,8 @@ INSTRUCTIONS = (
     "4) Gather evidence with the local diagnostics ping_host, traceroute_host, dns_lookup "
     "and check_port. Always pass the open case_id so each result is attached to the case "
     "automatically. These run from the PC where Trabasist is installed, not from the "
-    "affected device. "
+    "affected device. To test what the device itself can reach (its gateway, a server, "
+    "the internet, its DNS), use run_device_command with ping, traceroute or dig. "
     "To look inside a device, use run_device_command with the device name from the "
     "inventory and a command NAME from its list (never a free-form command line). Pass "
     "case_id. A refused command is not an error to work around: tell the person it is "
@@ -107,9 +108,14 @@ def run_device_command(device: str, command: str, params: dict | None = None,
                        case_id: int | None = None) -> dict:
     """Run one read-only allowlisted command on a device over SSH. device is the name from the
     device inventory (for example kali-lab). command is a command NAME, not a command line.
-    Linux commands: uptime, df, free, ip_a, ip_route, ss,
-    systemctl_status (params: service), journalctl (params: unit, lines 1-500),
-    dmesg (params: lines 1-500), last (params: count 1-100).
+    Linux commands with no parameters: uptime, df, free, ip_a, ip_route, ss, ip_link_stats,
+    ip_neigh, resolv_conf, uname, os_release, timedatectl, systemctl_failed, ps_top_cpu,
+    ps_top_mem, lsblk, df_inodes, who.
+    Linux commands with parameters: systemctl_status (service), journalctl (unit, lines 1-500),
+    dmesg (lines 1-500), last (count 1-100), ping (host, count 1-10),
+    traceroute (host, max_hops 1-30), dig (name, record_type one of A AAAA MX NS TXT CNAME SOA PTR; PTR needs an IP).
+    ping, traceroute and dig run ON the device, so they show what the device itself can reach,
+    unlike ping_host, traceroute_host and dns_lookup, which run from the PC.
     Anything else is refused and logged. status ok means the command ran and returned output, not that the device is healthy: read the output (for example 'could not be found') to judge the result. Pass case_id to attach the result to an open case."""
     return _run_device_command(device, command, params, case_id)
 

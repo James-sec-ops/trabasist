@@ -101,11 +101,46 @@ Claude Desktop starts the Trabasist server on your PC. Claude calls its tools to
 
 ### Linux commands (allowlist)
 
-Claude asks for a command by name. It cannot send free-form text, and anything not in this list is refused and logged.
+Claude asks for a command by name. It cannot send free-form text, and anything not in this list is refused and logged. There are 25 commands.
 
-`uptime`, `df`, `free`, `systemctl_status` (service name), `journalctl` (optional unit, 1-500 lines), `dmesg` (1-500 lines), `ip_a`, `ip_route`, `ss`, `last` (1-100 entries).
+**Commands with no parameters (18)**
 
-Service and unit names must match `^[A-Za-z0-9][A-Za-z0-9@._-]{0,63}$`. No other parameters are accepted.
+| Command | Runs | Shows |
+|---|---|---|
+| `uptime` | `uptime` | Load and time since boot |
+| `df` | `df -h` | Disk space |
+| `df_inodes` | `df -i` | Inode usage |
+| `free` | `free -h` | Memory |
+| `lsblk` | `lsblk` | Disks and mount points |
+| `ip_a` | `ip a` | Interfaces and addresses |
+| `ip_route` | `ip route` | Routing table |
+| `ip_link_stats` | `ip -s link` | Interface errors and drops |
+| `ip_neigh` | `ip neigh` | ARP and neighbour table |
+| `ss` | `ss -tuln` | Listening ports |
+| `resolv_conf` | `cat /etc/resolv.conf` | DNS servers the device uses |
+| `uname` | `uname -a` | Kernel and system |
+| `os_release` | `cat /etc/os-release` | Distribution and version |
+| `timedatectl` | `timedatectl` | Clock and time sync |
+| `systemctl_failed` | `systemctl --failed --no-pager` | Failed services |
+| `ps_top_cpu` | `ps` sorted by CPU, top 10 | Busiest processes (names only) |
+| `ps_top_mem` | `ps` sorted by memory, top 10 | Biggest memory users (names only) |
+| `who` | `who` | Logged-in users |
+
+**Commands with parameters (7)**
+
+| Command | Parameters |
+|---|---|
+| `systemctl_status` | `service` (required) |
+| `journalctl` | `unit` (optional), `lines` 1-500 (default 50) |
+| `dmesg` | `lines` 1-500 (default 100) |
+| `last` | `count` 1-100 (default 20) |
+| `ping` | `host`, `count` 1-10 (default 4) |
+| `traceroute` | `host`, `max_hops` 1-30 (default 15) |
+| `dig` | `name`, `record_type` one of A, AAAA, MX, NS, TXT, CNAME, SOA, PTR (default A; PTR needs an IP address) |
+
+`ping`, `traceroute` and `dig` run **on the device**, so they show what the device itself can reach. The tools `ping_host`, `traceroute_host` and `dns_lookup` run from your PC and show what your PC can reach. They answer different questions.
+
+Service and unit names must match `^[A-Za-z0-9][A-Za-z0-9@._-]{0,63}$`. Hosts and names must be plain IP addresses or hostnames (letters, digits, hyphens and dots), so names with an underscore are refused. No other parameters are accepted. The process lists show process names only, not full command lines, because command lines can contain passwords.
 
 ### Importing a config
 
@@ -156,6 +191,9 @@ It prints the new entry's id. Adding the same code and platform twice is refused
 - Device commands work on Linux only. Windows Server over OpenSSH, and switch and firewall command sets, are not in 1.0.0.
 - Status `ok` means the command ran and returned text. It does not mean the device is healthy. Read the output.
 - Your read-only account may not be allowed to read some logs (for example the system journal needs group membership, and `dmesg` can be restricted). The command then returns little or nothing.
+- Tools such as `traceroute` and `dig` must be installed on the device. On a minimal system the command returns "command not found".
+- `dig` accepts plain hostnames only, so names with an underscore (such as `_dmarc.example.com`) are refused.
+- Each device command opens a new SSH login, so each one takes roughly 10 to 15 seconds in the author's lab.
 - The output of `dmesg`, `ip_a`, `ip_route` and `ss` has not been checked for stray formatting characters on every system.
 - The `add_device` test login is not written to the audit log.
 - Search is keyword-based. Time to resolve in the sample data shows about 0 minutes because the sample cases are opened and closed instantly.
