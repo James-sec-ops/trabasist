@@ -48,7 +48,7 @@ INSTRUCTIONS = (
     "Never put passwords or keys in any field."
 )
 
-mcp = MCPServer("trabasist", instructions=INSTRUCTIONS, version="1.0.0")
+mcp = MCPServer("trabasist", instructions=INSTRUCTIONS, version="1.0.1")
 
 
 @mcp.tool()

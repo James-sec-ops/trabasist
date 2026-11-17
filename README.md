@@ -10,7 +10,7 @@ It is a resolution memory, not a ticketing system. Tracking exists to get the ne
 4. Reports on recurring problems.
 
 > **WARNING: test on lab devices first, not production.**
-> Trabasist 1.0.0 is a first public release and has had little outside testing. It only runs allowlisted, read-only commands, but it logs in to real devices over SSH. Use a read-only account, try it on lab machines, and read the output yourself before acting on it.
+> Trabasist 1.0.x is an early public release and has had little outside testing. It only runs allowlisted, read-only commands, but it logs in to real devices over SSH. Use a read-only account, try it on lab machines, and read the output yourself before acting on it.
 
 ## What version 1 supports
 
@@ -195,7 +195,6 @@ It prints the new entry's id. Adding the same code and platform twice is refused
 - `dig` accepts plain hostnames only, so names with an underscore (such as `_dmarc.example.com`) are refused.
 - Each device command opens a new SSH login, so each one takes roughly 10 to 15 seconds in the author's lab.
 - The output of `dmesg`, `ip_a`, `ip_route` and `ss` has not been checked for stray formatting characters on every system.
-- The `add_device` test login is not written to the audit log.
 - Search is keyword-based. Time to resolve in the sample data shows about 0 minutes because the sample cases are opened and closed instantly.
 - The report groups root causes by exact wording, so differently worded causes appear separately.
 - Diagnostics run from your PC, so odd things on your own network (for example an unusual TTL on ping) affect results.

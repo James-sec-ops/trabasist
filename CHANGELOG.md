@@ -1,5 +1,12 @@
 ﻿# Changelog
 
+## 1.0.1 - small fixes
+
+- add_device: the test login after saving a device is now written to the audit log (tool name add_device, result OK or FAILED with the reason, never the password).
+- add_device: a clearer message when a device name is not allowed.
+- run_device_command and add_device now share one audit writer.
+- The run_device_command test uses its own temporary database instead of searching your real audit log.
+
 ## 1.0.0 - first public release
 
 - Case tools: open_case, log_step, close_case, find_similar_cases, report.
