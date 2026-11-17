@@ -3,6 +3,7 @@ import os
 import re
 from pathlib import Path
 
+import paramiko
 from netmiko import ConnectHandler
 from netmiko.exceptions import NetmikoAuthenticationException, NetmikoTimeoutException
 
@@ -33,8 +34,55 @@ def _is_host_key_problem(exc):
             or "host key" in text or "does not match" in text)
 
 
+_WIN_PREFIX = 'powershell.exe -NoProfile -NonInteractive -Command "'
+_MAX_READ = MAX_OUTPUT * 4
+
+
+def _run_windows(device, creds, command_text, kh, timeout):
+    """Windows OpenSSH: one plain exec channel, no prompt handling. Host keys are verified."""
+    if not kh.is_file():
+        raise HostKeyRefused("known_hosts file not found; connect once with ssh to trust the host")
+    if any(ch in command_text for ch in '"\r\n\x00'):
+        raise DeviceConnectionError("command text is not allowed")
+    client = paramiko.SSHClient()
+    client.load_host_keys(str(kh))
+    client.set_missing_host_key_policy(paramiko.RejectPolicy())
+    try:
+        client.connect(device.address, port=device.port, username=creds.username,
+                       password=creds.password, look_for_keys=False, allow_agent=False,
+                       timeout=10, auth_timeout=15, banner_timeout=15)
+        stdin, stdout, stderr = client.exec_command(_WIN_PREFIX + command_text + '"', timeout=timeout)
+        stdin.close()
+        raw = stdout.read(_MAX_READ)
+        err = stderr.read(2000)
+        status = stdout.channel.recv_exit_status()
+    except paramiko.AuthenticationException:
+        raise DeviceConnectionError("authentication failed")
+    except Exception as exc:
+        if isinstance(exc, paramiko.BadHostKeyException) or _is_host_key_problem(exc):
+            raise HostKeyRefused("host key not trusted or changed; verify the device, then trust it with ssh")
+        if isinstance(exc, OSError):
+            raise DeviceConnectionError("connection timed out or host unreachable")
+        raise DeviceConnectionError(f"{type(exc).__name__} during SSH session")
+    finally:
+        client.close()
+    text = _ANSI_RE.sub("", raw.decode("utf-8", errors="replace").replace("\r", "")).strip("\n")
+    if status != 0:
+        detail = err.decode("utf-8", errors="replace").replace("\r", "").strip()
+        if detail.startswith("#< CLIXML"):
+            detail = ""
+        note = f"[exit code {status}" + (f": {detail[:300]}" if detail else "") + "]"
+        text = f"{text}\n{note}" if text else note
+    if len(text) > MAX_OUTPUT:
+        text = text[:MAX_OUTPUT] + "\n[output truncated]"
+    return text
+
+
 def run_command(device, creds, command_text, known_hosts=None, timeout=30):
     """Run one already-validated command and return its raw output text."""
+    if device.platform == "windows":
+        return _run_windows(device, creds, command_text,
+                            Path(known_hosts) if known_hosts else known_hosts_path(), timeout)
     device_type = DEVICE_TYPES.get(device.platform)
     if device_type is None:
         raise DeviceConnectionError(f"platform not supported: {device.platform!r}")

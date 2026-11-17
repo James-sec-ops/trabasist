@@ -112,7 +112,64 @@ LINUX = {
     "who": (set(), lambda p: "who"),
 }
 
-PLATFORMS = {"linux": LINUX}
+# ---- Windows (PowerShell over OpenSSH) ----
+# Command text must contain no double quote, dollar sign, brace, backtick or semicolon, so it
+# behaves the same whether cmd.exe or PowerShell is the default SSH shell.
+_LIST = " | Format-List | Out-String -Width 200"
+_TABLE = " | Format-Table -AutoSize | Out-String -Width 200"
+_EVENT_LOGS = ("System", "Application")
+
+
+def _choice(params, key, choices, default):
+    value = params.get(key, default)
+    if not isinstance(value, str) or value not in choices:
+        raise CommandRefused(f"{key} must be one of: " + ", ".join(choices))
+    return value
+
+
+def _cim(cls, props):
+    return f"Get-CimInstance {cls} | Select-Object {props}" + _LIST
+
+
+def _eventlog(p):
+    log = _choice(p, "log", _EVENT_LOGS, "System")
+    lines = _int(p, "lines", 20, 1, 100)
+    return (f"Get-WinEvent -LogName {log} -MaxEvents {lines} | "
+            "Select-Object TimeCreated,Id,LevelDisplayName,ProviderName,Message" + _LIST)
+
+
+def _test_netconnection(p):
+    host = _host(p, "host")
+    if "port" not in p:
+        raise CommandRefused("port is required")
+    port = _int(p, "port", 0, 1, 65535)
+    return (f"Test-NetConnection -ComputerName {host} -Port {port} -WarningAction SilentlyContinue | "
+            "Select-Object ComputerName,RemoteAddress,RemotePort,InterfaceAlias,SourceAddress,"
+            "TcpTestSucceeded" + _LIST)
+
+
+WINDOWS = {
+    "uptime": (set(), lambda p: _cim("Win32_OperatingSystem", "CSName,LastBootUpTime")),
+    "os_info": (set(), lambda p: _cim("Win32_OperatingSystem", "Caption,Version,BuildNumber,OSArchitecture")),
+    "cpu": (set(), lambda p: _cim("Win32_Processor", "Name,NumberOfCores,NumberOfLogicalProcessors,LoadPercentage")),
+    "memory": (set(), lambda p: _cim("Win32_OperatingSystem", "TotalVisibleMemorySize,FreePhysicalMemory")),
+    "disk": (set(), lambda p: "Get-PSDrive -PSProvider FileSystem | Select-Object Name,Used,Free" + _TABLE),
+    "services": (set(), lambda p: "Get-Service | Sort-Object Status,Name | Select-Object Name,Status,StartType" + _TABLE),
+    "service_status": (
+        {"service"},
+        lambda p: (f"Get-Service -Name {_service(p, 'service', True)} | "
+                   "Select-Object Name,DisplayName,Status,StartType" + _LIST),
+    ),
+    "processes_top_cpu": (set(), lambda p: "Get-Process | Sort-Object CPU -Descending | Select-Object -First 10 Id,ProcessName,CPU,WorkingSet" + _TABLE),
+    "processes_top_mem": (set(), lambda p: "Get-Process | Sort-Object WorkingSet -Descending | Select-Object -First 10 Id,ProcessName,CPU,WorkingSet" + _TABLE),
+    "eventlog": ({"log", "lines"}, _eventlog),
+    "ipconfig": (set(), lambda p: "ipconfig /all"),
+    "netstat": (set(), lambda p: "netstat -an"),
+    "routes": (set(), lambda p: "route print"),
+    "test_netconnection": ({"host", "port"}, _test_netconnection),
+}
+
+PLATFORMS = {"linux": LINUX, "windows": WINDOWS}
 
 
 def list_commands(platform):
