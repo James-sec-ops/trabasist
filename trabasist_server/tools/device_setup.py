@@ -18,7 +18,7 @@ class SetupError(ValueError):
 
 def label_from_name(name):
     if not isinstance(name, str) or not _NAME_RE.fullmatch(name):
-        raise SetupError("invalid device name")
+        raise SetupError("invalid device name: use 1-64 letters, digits, dots, underscores or hyphens, starting with a letter or digit (no spaces)")
     label = re.sub(r"[^A-Za-z0-9]+", "_", name).upper().strip("_")
     if not _LABEL_RE.fullmatch(label):
         raise SetupError("device name is too long to make a credentials label (max 32 characters)")

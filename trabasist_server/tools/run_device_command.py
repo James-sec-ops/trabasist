@@ -1,6 +1,7 @@
 ﻿"""run_device_command tool: allowlisted, read-only commands over SSH. Everything is audited."""
 from trabasist_server.db import get_connection, init_db
 from trabasist_server.redact import redact
+from trabasist_server.tools.audit import write_audit
 from trabasist_server.tools.command_allowlist import build_command, CommandRefused
 from trabasist_server.tools.diag_common import check_case_open, record_diagnostic
 from trabasist_server.tools.inventory import get_device, get_credentials, InventoryError
@@ -11,21 +12,8 @@ _MAX_FIELD = 500
 
 
 def _audit(device, command, summary) -> int:
-    """Write one audit row. Text is redacted and shortened first."""
-    device = redact(str(device))[:100]
-    command = redact(str(command))[:_MAX_FIELD]
-    summary = redact(str(summary))[:_MAX_FIELD]
-    init_db()
-    conn = get_connection()
-    try:
-        cur = conn.execute(
-            "INSERT INTO audit_log (tool, device, command, result_summary) VALUES (?, ?, ?, ?)",
-            (TOOL, device, command, summary),
-        )
-        conn.commit()
-        return cur.lastrowid
-    finally:
-        conn.close()
+    """Write one audit row (shared writer in audit.py)."""
+    return write_audit(TOOL, device, command, summary)
 
 
 def _problem(status, device, command, reason, tried):

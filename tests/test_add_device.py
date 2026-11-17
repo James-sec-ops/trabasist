@@ -1,7 +1,8 @@
-﻿import hashlib, json, os, subprocess, tempfile
+﻿import hashlib, json, os, sqlite3, subprocess, tempfile
 from pathlib import Path
 from dotenv import dotenv_values
 from trabasist_server.add_device import run_add_device
+from trabasist_server.db import db_path
 from trabasist_server.tools.hostkey_setup import _hostname_for
 from trabasist_server.tools.inventory import get_device, get_credentials, env_path, inventory_path
 from trabasist_server.tools.ssh_conn import known_hosts_path
@@ -17,7 +18,7 @@ dev = get_device("kali-lab")
 real = get_credentials(dev.credentials)
 USER, PW, ADDR, PORT = real.username, real.password, dev.address, dev.port
 
-REAL_FILES = [inventory_path(), env_path(), known_hosts_path()]
+REAL_FILES = [inventory_path(), env_path(), known_hosts_path(), db_path()]
 def digest():
     return [hashlib.sha256(p.read_bytes()).hexdigest() if p.exists() else None for p in REAL_FILES]
 before = digest()
@@ -27,7 +28,18 @@ def fresh():
     os.environ["TRABASIST_DEVICES"] = str(d / "devices.json")
     os.environ["TRABASIST_ENV"] = str(d / ".env")
     os.environ["TRABASIST_KNOWN_HOSTS"] = str(d / "known_hosts")
+    os.environ["TRABASIST_DB"] = str(d / "trabasist.db")
     return d
+
+def audit_rows(d):
+    f = d / "trabasist.db"
+    if not f.exists():
+        return []
+    conn = sqlite3.connect(f)
+    try:
+        return conn.execute("SELECT tool, device, command, result_summary FROM audit_log ORDER BY id").fetchall()
+    finally:
+        conn.close()
 
 def scripted(items):
     items = list(items)
@@ -63,6 +75,7 @@ vals = dotenv_values(d / ".env", interpolate=False)
 check("1 credentials saved exactly", vals["KALI_TEST_USERNAME"] == USER and vals["KALI_TEST_PASSWORD"] == PW)
 check("1 host key saved to temp known_hosts", ADDR in (d / "known_hosts").read_text(encoding="utf-8"))
 check("1 password never printed", PW not in text)
+check("1 test login audited as OK", audit_rows(d) == [("add_device", "kali-test", "uptime", "OK")])
 
 # 1b. duplicate name refused, then a second device on a trusted key
 inv_before = (d / "devices.json").read_text(encoding="utf-8")
@@ -76,6 +89,7 @@ check("1b both devices stored", len(json.loads((d / "devices.json").read_text(en
 d = fresh()
 code, lines = run(["kali-test", ADDR, "", "", USER, "no"], [PW, PW])
 check("2 declined returns 1", code == 1)
+check("2 nothing audited", audit_rows(d) == [])
 check("2 nothing written",
       not (d / "devices.json").exists() and not (d / ".env").exists() and not (d / "known_hosts").exists())
 
@@ -111,9 +125,11 @@ text = "\n".join(lines)
 check("6 wrong password returns 1", code == 1 and "Test login failed" in text)
 check("6 wrong password never printed", "wrong-pass-test" not in text)
 check("6 device still saved", (d / "devices.json").exists())
+rows = audit_rows(d)
+check("6 failed login audited, no password", len(rows) == 1 and rows[0][3].startswith("FAILED") and "wrong-pass-test" not in str(rows))
 
 # real files must be untouched
-for k in ("TRABASIST_DEVICES", "TRABASIST_ENV", "TRABASIST_KNOWN_HOSTS"):
+for k in ("TRABASIST_DEVICES", "TRABASIST_ENV", "TRABASIST_KNOWN_HOSTS", "TRABASIST_DB"):
     os.environ.pop(k, None)
 check("real devices.json, .env and known_hosts unchanged", digest() == before)
 

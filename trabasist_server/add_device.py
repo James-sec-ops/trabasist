@@ -10,6 +10,7 @@ import sys
 
 from dotenv import dotenv_values
 
+from trabasist_server.tools.audit import write_audit
 from trabasist_server.tools.command_allowlist import PLATFORMS, build_command
 from trabasist_server.tools.device_setup import (
     SetupError, _check_value, add_credentials, add_device_entry, label_from_name)
@@ -125,6 +126,13 @@ def _confirm_host_key(address, port, ask, out):
     return key, True
 
 
+def _audit_test_login(out, name, command_text, summary):
+    try:
+        write_audit("add_device", name, command_text, summary)
+    except Exception:
+        out("  (could not write the audit log)")
+
+
 def _flow(ask, ask_secret, out):
     out("Add a device to Trabasist. Use lab devices first, not production.")
     out("The password is typed hidden and saved only in .env. It is never shown or sent to the AI.")
@@ -148,12 +156,15 @@ def _flow(ask, ask_secret, out):
     out(f"Saved device {name}. Its login is stored in .env under {label}_USERNAME and {label}_PASSWORD.")
 
     device = Device(name, address, platform, port, label)
+    command_text = build_command(platform, "uptime")
     try:
-        output = run_command(device, Credentials(username, password), build_command(platform, "uptime"))
+        output = run_command(device, Credentials(username, password), command_text)
     except DeviceConnectionError as exc:
+        _audit_test_login(out, name, command_text, f"FAILED: {exc}")
         out(f"Test login failed: {exc}")
         out(f"The device is saved. Check the {label}_ lines in .env, or the device itself, and try again.")
         return 1
+    _audit_test_login(out, name, command_text, "OK")
     out("Test login OK: " + (output.splitlines()[0] if output else "(no output)"))
     return 0
 

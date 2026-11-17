@@ -1,4 +1,8 @@
-﻿import json, os, tempfile
+import os, tempfile
+os.environ["TRABASIST_DB"] = os.path.join(tempfile.mkdtemp(), "test.db")
+from trabasist_server.db import init_db
+init_db()
+import json, os, tempfile
 from pathlib import Path
 from trabasist_server.db import get_connection, init_db
 from trabasist_server.tools.run_device_command import run_device_command
