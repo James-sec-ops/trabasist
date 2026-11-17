@@ -149,11 +149,11 @@ def _test_netconnection(p):
 
 
 WINDOWS = {
-    "uptime": (set(), lambda p: _cim("Win32_OperatingSystem", "CSName,LastBootUpTime")),
-    "os_info": (set(), lambda p: _cim("Win32_OperatingSystem", "Caption,Version,BuildNumber,OSArchitecture")),
-    "cpu": (set(), lambda p: _cim("Win32_Processor", "Name,NumberOfCores,NumberOfLogicalProcessors,LoadPercentage")),
+    "uptime": (set(), lambda p: "New-TimeSpan -Seconds (([Environment]::TickCount -band 4294967295) / 1000) | Select-Object Days,Hours,Minutes,Seconds" + _LIST),
+    "os_info": (set(), lambda p: r"Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' | Select-Object ProductName,DisplayVersion,CurrentBuild,UBR" + _LIST),
+    "cpu": (set(), lambda p: r"Get-ChildItem -Path 'HKLM:\HARDWARE\DESCRIPTION\System\CentralProcessor' | Get-ItemProperty | Select-Object PSChildName,ProcessorNameString" + _TABLE),
     "memory": (set(), lambda p: _cim("Win32_OperatingSystem", "TotalVisibleMemorySize,FreePhysicalMemory")),
-    "disk": (set(), lambda p: "Get-PSDrive -PSProvider FileSystem | Select-Object Name,Used,Free" + _TABLE),
+    "disk": (set(), lambda p: "[System.IO.DriveInfo]::GetDrives() | Where-Object IsReady | Select-Object Name,DriveType,TotalSize,AvailableFreeSpace" + _TABLE),
     "services": (set(), lambda p: "Get-Service | Sort-Object Status,Name | Select-Object Name,Status,StartType" + _TABLE),
     "service_status": (
         {"service"},
