@@ -104,10 +104,32 @@ END;
 """
 
 
+_AUDIT_COLUMNS = {
+    "tier": "ALTER TABLE audit_log ADD COLUMN tier INTEGER",
+    "decision": "ALTER TABLE audit_log ADD COLUMN decision TEXT",
+    "rule": "ALTER TABLE audit_log ADD COLUMN rule TEXT",
+    "tag": "ALTER TABLE audit_log ADD COLUMN tag TEXT",
+    "change_mode": "ALTER TABLE audit_log ADD COLUMN change_mode INTEGER",
+}
+
+
+def _migrate(conn) -> None:
+    """Add the Phase 1 audit columns to an older database. Safe to run any number of times."""
+    have = {row["name"] for row in conn.execute("PRAGMA table_info(audit_log)")}
+    for name, statement in _AUDIT_COLUMNS.items():
+        if name not in have:
+            try:
+                conn.execute(statement)
+            except sqlite3.OperationalError as exc:
+                if "duplicate column" not in str(exc).lower():
+                    raise
+
+
 def init_db() -> None:
     conn = get_connection()
     try:
         conn.executescript(SCHEMA)
+        _migrate(conn)
         conn.commit()
     finally:
         conn.close()

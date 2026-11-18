@@ -5,6 +5,7 @@ import subprocess
 
 from trabasist_server.db import get_connection, init_db
 from trabasist_server.redact import redact
+from trabasist_server.tools.audit import clean_meta
 from trabasist_server.tools.log_step import log_step
 
 _LABEL = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
@@ -68,7 +69,8 @@ def run_fixed(args: list, timeout: int = 30):
         return -1, f"program not found: {args[0]}"
 
 
-def record_diagnostic(tool, device, command, output, case_id=None, outcome="inconclusive") -> dict:
+def record_diagnostic(tool, device, command, output, case_id=None, outcome="inconclusive",
+                      meta=None) -> dict:
     """Write to the audit log, and to the case if one is given. Output is redacted."""
     command = redact(command)
     output = redact(output) or ""
@@ -76,9 +78,11 @@ def record_diagnostic(tool, device, command, output, case_id=None, outcome="inco
     init_db()
     conn = get_connection()
     try:
+        extra = clean_meta(**(meta or {}))
         cur = conn.execute(
-            "INSERT INTO audit_log (tool, device, command, result_summary) VALUES (?, ?, ?, ?)",
-            (tool, device, command, summary),
+            "INSERT INTO audit_log (tool, device, command, result_summary, "
+            "tier, decision, rule, tag, change_mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (tool, device, command, summary) + extra,
         )
         conn.commit()
         audit_id = cur.lastrowid
