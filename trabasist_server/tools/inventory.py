@@ -16,6 +16,10 @@ _LABEL_RE = re.compile(r"^[A-Z0-9_]{1,32}$")
 _HOST_RE = re.compile(r"^(?=.{1,253}$)([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$")
 
 
+TAGS = ("lab", "production")
+DEFAULT_TAG = "production"
+
+
 class InventoryError(ValueError):
     pass
 
@@ -27,6 +31,8 @@ class Device:
     platform: str
     port: int
     credentials: str
+    tag: str = DEFAULT_TAG
+    change_mode: bool = False
 
 
 @dataclass(frozen=True)
@@ -69,7 +75,13 @@ def _parse_device(raw):
         raise InventoryError(f"invalid port for {name}")
     if not isinstance(label, str) or not _LABEL_RE.fullmatch(label):
         raise InventoryError(f"invalid credentials label for {name}")
-    return Device(name, address, platform, port, label)
+    tag = raw.get("tag", DEFAULT_TAG)
+    if not isinstance(tag, str) or tag not in TAGS:
+        raise InventoryError(f"invalid tag for {name}: must be 'lab' or 'production'")
+    change_mode = raw.get("change_mode", False)
+    if not isinstance(change_mode, bool):
+        raise InventoryError(f"invalid change_mode for {name}: must be true or false")
+    return Device(name, address, platform, port, label, tag, change_mode)
 
 
 def load_inventory(path=None):
@@ -90,6 +102,41 @@ def load_inventory(path=None):
             raise InventoryError(f"duplicate device name: {dev.name}")
         result[dev.name] = dev
     return result
+
+
+def _read_device_list(path):
+    path = Path(path) if path else inventory_path()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except FileNotFoundError:
+        raise InventoryError("device inventory file not found")
+    except json.JSONDecodeError:
+        raise InventoryError("device inventory file is not valid JSON")
+    devices = data.get("devices") if isinstance(data, dict) else None
+    if not isinstance(devices, list):
+        raise InventoryError("inventory must contain a 'devices' list")
+    return devices
+
+
+def load_inventory_report(path=None):
+    """Load every valid device and report the bad ones instead of failing everything.
+
+    Returns (devices, problems). devices maps name to Device. problems is a list of
+    short messages. A device with an invalid field is skipped, never loaded with
+    guessed values.
+    """
+    result, problems = {}, []
+    for index, raw in enumerate(_read_device_list(path), start=1):
+        try:
+            dev = _parse_device(raw)
+        except InventoryError as exc:
+            problems.append(f"entry {index}: {str(exc)[:200]}")
+            continue
+        if dev.name in result:
+            problems.append(f"entry {index}: duplicate device name: {dev.name}")
+            continue
+        result[dev.name] = dev
+    return result, problems
 
 
 def get_device(name, path=None):
