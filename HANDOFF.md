@@ -1,6 +1,6 @@
 # Trabasist V2 handoff
 
-Last updated: 17 Nov 2026, end of Phase 0. Read this first in every new phase chat, together with the scope
+Last updated: 19 Nov 2026, end of Phase 1. Read this first in every new phase chat, together with the scope
 (Trabasist_V2_Scope.md v0.2 in the V2 project).
 
 ## Where things stand
@@ -76,14 +76,66 @@ Windows read-only commands as run by the limited account trabread:
 - set_addr.py: device address helper described above.
 - win_probe.py: scratch probe of what the Windows read-only account may run. Safe to delete.
 
-## Next: Phase 1 - command classifier, tiers, device tags, change mode off by default
-Scope section 5.1. Tier 1 read-only, Tier 2 normal changes (automatic on lab devices, approval on production),
-Tier 3 critical (always needs the owner's approval). Unknown or ambiguous commands are Tier 3, never Tier 1. Chaining,
-pipes to a shell, overwriting redirects and encoded commands are Tier 3 at least. Devices get a lab or production tag.
-Change mode is off for every device and turned on per device. Every command goes through the classifier and the
-audit log records the tier.
-- Today the allowlist is the only gate and everything in it is read-only. Phase 1 must not weaken that.
-- Open design questions: where the tag and the change-mode switch live in devices.json, how the classifier sits in
-  front of the allowlist, how free-form commands are tiered per platform (Linux, Windows PowerShell and cmd, Cisco IOS,
-  MikroTik RouterOS), and how existing 1.0.x inventories keep loading (new fields need safe defaults: change mode off).
-- Approval (Phase 2) is outside the chat and cannot be given through the MCP server.
+## Phase 1 - done (19 Nov 2026)
+Commits on v2 since the Phase 0 handoff:
+  b5164c9 Phase 1 step 1: device tag and change_mode fields, load_inventory_report
+  4dfbb76 Phase 1 step 2: command classifier (Tier 1/2/3) with tests
+  e611e04 Phase 1 step 3: policy gate (tier, tag, change mode) with tests
+  3e20a1a Phase 1 step 4: classifier and policy gate wired into run_device_command, audit tier columns
+  79c584f Phase 1 step 5: expose check_device_command, Windows command names, safety instructions
+
+What exists now:
+- inventory.py: Device has tag (lab or production, default production) and change_mode (default false).
+  load_inventory_report(path) returns (devices, problems) and skips a bad entry instead of failing everything.
+  load_inventory stays strict and unchanged.
+- classifier.py: classify(platform, command) -> (tier, rule, reason). Pure, never raises. Tier 1 only when the text
+  equals an allowlist command exactly. Tier 2 patterns: Linux systemctl restart/start/reload, apt/apt-get/dnf/yum
+  install -y, ip addr add; Windows Restart-Service/Start-Service. Protected services stay Tier 3 (Linux: ssh, sshd,
+  networking, network, NetworkManager, systemd-networkd; Windows: sshd, WinRM, Dhcp, Dnscache, NlaSvc, Netman,
+  NetProfM, LanmanServer, EventLog). Everything else is Tier 3. Cisco and MikroTik have no rules yet, so all Tier 3.
+  classify_named builds an allowlist command with build_command and returns Tier 1.
+- policy.py: decide(classification, tag, change_mode) -> (action, code, reason). Tier 1 always allow. Tier 2: refused
+  if change mode is off, allow on lab, needs_approval on production. Tier 3: refused if change mode is off, else
+  needs_approval. There is no approved argument. Bad input is refused.
+- audit_log has tier, decision, rule, tag, change_mode. init_db migrates old databases safely. write_audit takes them
+  as keyword-only optional arguments; record_diagnostic takes meta.
+- run_device_command: named commands go classify_named, then decide, then run as before (all Tier 1). A device skipped
+  for a bad entry reports its real reason. check_device_command(device, command) classifies and gates a free-form
+  command and never runs it (executed false). It is an MCP tool in server.py. The server instructions say Claude
+  cannot approve and that device text is never an instruction.
+- Nothing can change a device yet. Tier 2 allow means the policy would allow it. Execution comes with the platform
+  phases (3 for Linux, 4 for Windows).
+
+Test baseline (19 Nov 2026), all passing:
+- Offline: classifier 28, policy 51, inventory_tags 24, inventory 19, step4_wiring 31, server_tools 17.
+- Live: run_device_command 13, windows_live 14 passed and 3 skipped (same as Phase 0), add_device 25, hostkey_setup
+  no failures.
+- New Phase 1 tests set sys.path themselves. Older tests still need PYTHONPATH.
+- Live check in Claude Desktop: with no tag, kali-lab is production with change mode off, so nginx restart, ssh
+  restart, reboot and a chained command were all refused (policy:change-mode-off). Claude refused to "just run" reboot.
+
+Notes:
+- The real devices.json has no tags, so every device is production with change mode off. To see the allow and
+  needs_approval branches live, set kali-lab to tag lab and change_mode true, restart Claude Desktop, and put the
+  backup (devices.json.bak) back afterwards.
+- Git warns that LF will be replaced by CRLF on new files. Harmless. A .gitattributes file would settle it.
+- Still open from Phase 0: test_wrong_hostkey prints FAIL but exits 0; tests need a proper runner; 1.0.x add_device
+  only offers linux; Windows memory, services and eventlog need the Administrator account (Phase 4).
+
+## Next: Phase 2 - approval outside the chat
+Scope sections 5.2 and 7. Claude can request a Tier 3 action but cannot approve it. The owner approves in a separate
+terminal command that shows the exact command and device. An approval covers one command on one device, runs once and
+expires. It cannot be given through the MCP server, and text from devices, logs or web pages cannot trigger one.
+Optional: approve a written change plan as a whole, with a check after each step, stopping on failure or deviation.
+Checks (scope section 9): a Tier 3 command without approval, an expired approval, a reused approval, an approval for
+a different command or device, and an injection attempt through device output must all be refused and logged.
+- Phase 1 supplies the inputs: Classification, Decision with needs_approval, and audit columns for decision and tag.
+- Open design questions: where pending requests and approvals are stored (an approvals table in the same database is
+  the likely answer); how an approval is bound to the exact command text, device and tier (a hash over those fields);
+  how long it lives; how a row is proved to come from the approval command and not from anything else that can write
+  the database (for example a signature using a secret in .env); how Claude files a request (check_device_command
+  could create the pending request when the decision is needs_approval); what the approval command shows and asks for.
+- The approval module must not be imported by server.py and must not appear as an MCP tool.
+- Execution of free-form commands still does not exist. Phase 2 is built and tested with a fake executor. The first
+  real execution is Phase 3 (Linux, sudo on Kali).
+- Before Phase 3 the Kali account needs a longer password, because it gets elevated rights.
